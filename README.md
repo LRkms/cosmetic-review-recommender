@@ -28,7 +28,7 @@ The application includes a **PyQt5-based GUI** where users can select their skin
 
 | Component | Description |
 |----------|-------------|
-| `scraper/` | Web crawler to collect product reviews from Olive Young |
+| `Crawling/` | Web crawler to collect product reviews from Olive Young |
 | `preprocessing/` | Cleans and tokenizes review text (Korean NLP) |
 | `models/` | Trained Word2Vec and TF-IDF models |
 | `app/` | PyQt5-based GUI application |
@@ -44,7 +44,7 @@ The application includes a **PyQt5-based GUI** where users can select their skin
 - Gensim (Word2Vec)  
 - Scikit-learn (TF-IDF, cosine similarity)  
 - BeautifulSoup / Selenium (for scraping)  
-- Mecab-ko or Okt (Korean NLP)
+- Mecab-ko (Korean NLP)
 
 ---
 
@@ -52,7 +52,7 @@ The application includes a **PyQt5-based GUI** where users can select their skin
 
 ```bash
 # 1. Clone this repository
-git clone https://github.com/your-username/your-repo-name.git
+git clone https://github.com/LRkms/cosmetic-review-recommender.git
 
 # 2. Install dependencies
 pip install -r requirements.txt
