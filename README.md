@@ -20,7 +20,7 @@ The application includes a **PyQt5-based GUI** where users can select their skin
 
 ## 🖥 Application Preview
 
-> (Insert screenshots or GIF of the PyQt5 GUI here)
+> 
 
 ---
 
