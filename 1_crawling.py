@@ -6,9 +6,11 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
+from datetime import datetime
 import time
 import pandas as pd
 import os
+
 
 # -------------------------------
 # 🍀 Chrome Driver 설정
@@ -35,22 +37,25 @@ driver = webdriver.Chrome(
 driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 print("✅ 크롬 드라이버 설정 완료")
 
+total_start_time = time.time()
+start_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+print(f"🚀 크롤링 시작: {start_datetime}")
 # -------------------------------
 # 📦 카테고리 설정
 # -------------------------------
 category_names = ['skincare', 'cleansing', 'suncare', 'menscare']
 prefixes = [
     '1000001000100',  # 스킨케어
-    '1000001001000',  # 클렌징
-    '1000001001100',  # 선케어
-    '1000001000700',  # 맨즈케어
+    # '1000001001000',  # 클렌징
+    # '1000001001100',  # 선케어
+    # '1000001000700',  # 맨즈케어
 ]
 # 각 카테고리별 하위 카테고리 코드 및 키 이름
 subcategory_map = [
-    [(13, 'toner'), (14, 'serum'), (15, 'cream'), (16, 'lotion'), (10, 'mist_oil')],
-    [(1, 'foam_gel'), (4, 'oil_balm'), (5, 'water_milk'), (7, 'peeling_scrub')],
-    [(6, 'suncream'), (3, 'sunstick'), (4, 'suncushion'), (5, 'sunspray_patch')],
-    [(7, 'toner'), (8, 'serum'), (10, 'cream')],
+    # [(13, 'toner'), (14, 'serum'), (15, 'cream'), (16, 'lotion'), (10, 'mist_oil')],
+    # [(1, 'foam_gel'), (4, 'oil_balm'), (5, 'water_milk'), (7, 'peeling_scrub')],
+    # [(6, 'suncream'), (3, 'sunstick'), (4, 'suncushion'), (5, 'sunspray_patch')],
+    [(7, 'toner')],
 ]
 
 # 데이터 저장 디렉토리 생성
@@ -70,7 +75,7 @@ for idx in range(len(category_names)):
 
         print(f"\n📁 [{category} → {sub}] 크롤링 시작")
         current_page = 1
-        MAX_PAGE = 3  # 테스트용으로 3페이지만 크롤링
+        MAX_PAGE = 1  # 테스트용으로 3페이지만 크롤링
 
         # 페이지별 반복
         while current_page <= MAX_PAGE:
@@ -108,7 +113,18 @@ for idx in range(len(category_names)):
                             )
                             review_tab.click()
                             time.sleep(2)
-
+                            try:
+                                print("        🔄 체험단 필터 해제 중...")
+                                # 방법 1: 체크박스 직접 클릭
+                                experience_checkbox = WebDriverWait(driver, 3).until(
+                                    EC.element_to_be_clickable((By.CSS_SELECTOR, '#searchType div:nth-child(4) input'))
+                                )
+                                if experience_checkbox.is_selected():  # 체크되어 있으면
+                                    experience_checkbox.click()  # 클릭해서 해제
+                                    time.sleep(1)
+                                    print("        ✅ 체험단 필터 해제 완료")
+                            except Exception as e:
+                                print(f"        ⚠️ 체험단 필터 해제 실패 (계속 진행): {e}")
                             # 최대 5개 리뷰 수집
                             for r_idx in range(1, 6):
                                 try:
@@ -123,7 +139,7 @@ for idx in range(len(category_names)):
                                         try:
                                             tag_xpath = (
                                                 f'//*[@id="gdasList"]/li[{r_idx}]/'
-                                                'div[2]/div[2]/dl[{tag_idx}]/dd/span'
+                                                f'div[2]/div[2]/dl[{tag_idx}]/dd/span'
                                             )
                                             tag = driver.find_element(By.XPATH, tag_xpath).text.strip()
                                             tags.append(tag)
@@ -160,8 +176,15 @@ for idx in range(len(category_names)):
         df.to_csv(f'./data/{key}.csv', index=False, encoding='utf-8-sig')
         print(f"✅ 저장 완료: {key}.csv (총 {len(category_data)}개 리뷰)")
 
-# -------------------------------
-# 🛑 브라우저 종료
-# -------------------------------
+total_end_time = time.time()
+total_duration = total_end_time - total_start_time
+end_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+print(f"\n🏁 크롤링 완료: {end_datetime}")
+print(f"⏱️ 총 소요시간: {total_duration:.1f}초 ({total_duration/60:.1f}분)")
+if total_duration >= 3600:
+    print(f"⏱️ 총 소요시간: {total_duration/3600:.1f}시간")
+
+# 브라우저 종료
 print("\n🛑 브라우저 종료 중...")
 driver.quit()
