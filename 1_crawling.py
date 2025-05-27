@@ -16,14 +16,14 @@ import os
 # ========================================
 # 페이지 설정
 MAX_PAGES = 1  # 크롤링할 최대 페이지 수 (테스트: 1, 운영: 10+)
-MAX_REVIEWS_PER_PRODUCT = 5  # 제품당 수집할 최대 리뷰 수 (테스트: 5, 운영: 20+)
+MAX_REVIEWS_PER_PRODUCT = 100  # 제품당 수집할 최대 리뷰 수 (테스트: 5, 운영: 20+)
 MAX_TAGS_PER_REVIEW = 5  # 리뷰당 수집할 최대 태그 수
 
 # 대기 시간 설정 (초)
-PAGE_LOAD_WAIT = 1  # 페이지 로딩 대기 시간
-PRODUCT_CLICK_WAIT = 1  # 제품 클릭 후 대기 시간
-REVIEW_TAB_WAIT = 1  # 리뷰 탭 클릭 후 대기 시간
-BACK_WAIT = 1  # 뒤로가기 후 대기 시간
+PAGE_LOAD_WAIT = 3  # 페이지 로딩 대기 시간
+PRODUCT_CLICK_WAIT = 2  # 제품 클릭 후 대기 시간
+REVIEW_TAB_WAIT = 2  # 리뷰 탭 클릭 후 대기 시간
+BACK_WAIT = 2 # 뒤로가기 후 대기 시간
 
 # 제품 탐색 범위 설정
 UL_RANGE_START = 2  # ul 탐색 시작 인덱스
@@ -154,52 +154,69 @@ for idx in range(min(len(category_names), len(prefixes), len(subcategory_map))):
                             review_tab.click()
                             time.sleep(REVIEW_TAB_WAIT)
 
-                            # 체험단 필터 해제
+                            # 체험단 필터 해제 (기존 코드)
                             try:
                                 print("        🔄 체험단 필터 해제 중...")
                                 experience_checkbox = WebDriverWait(driver, 3).until(
                                     EC.element_to_be_clickable((By.CSS_SELECTOR, '#searchType div:nth-child(4) input'))
                                 )
-                                if experience_checkbox.is_selected():  # 체크되어 있으면
-                                    experience_checkbox.click()  # 클릭해서 해제
+                                if experience_checkbox.is_selected():
+                                    experience_checkbox.click()
                                     time.sleep(1)
                                     print("        ✅ 체험단 필터 해제 완료")
                             except Exception as e:
                                 print(f"        ⚠️ 체험단 필터 해제 실패 (계속 진행): {e}")
 
-                            # 리뷰 수집
-                            for r_idx in range(1, MAX_REVIEWS_PER_PRODUCT + 1):
+                            # ➡️ 리뷰 페이지별 수집 시작
+                            page_num = 1
+                            reviews_collected = 0
+                            while reviews_collected < MAX_REVIEWS_PER_PRODUCT:
+                                # 현재 페이지 리뷰 수집
+                                for r_idx in range(1, MAX_REVIEWS_PER_PRODUCT + 1):
+                                    if reviews_collected >= MAX_REVIEWS_PER_PRODUCT:
+                                        break
+                                    try:
+                                        review_xpath = f'//*[@id="gdasList"]/li[{r_idx}]/div[2]/div[3]'
+                                        review = driver.find_element(By.XPATH, review_xpath).text.strip()
+
+                                        tags = []
+                                        for tag_idx in range(1, MAX_TAGS_PER_REVIEW + 1):
+                                            try:
+                                                tag_xpath = (
+                                                    f'//*[@id="gdasList"]/li[{r_idx}]/'
+                                                    f'div[2]/div[2]/dl[{tag_idx}]/dd/span'
+                                                )
+                                                tag = driver.find_element(By.XPATH, tag_xpath).text.strip()
+                                                tags.append(tag)
+                                            except NoSuchElementException:
+                                                continue
+
+                                        category_data.append({
+                                            'product': name,
+                                            'tag': ', '.join(tags),
+                                            'review': review
+                                        })
+                                        reviews_collected += 1
+                                        print(f"        🏷️ 태그: {tags}")
+                                        print(
+                                            f"        ✅ 리뷰 [{reviews_collected}/{MAX_REVIEWS_PER_PRODUCT}]: {review[:30]}...")
+                                    except NoSuchElementException:
+                                        continue
+
+                                # 다음 페이지 버튼 클릭
+                                page_num += 1
                                 try:
-                                    # 리뷰 텍스트 추출
-                                    review_xpath = f'//*[@id="gdasList"]/li[{r_idx}]/div[2]/div[3]'
-                                    review = driver.find_element(By.XPATH, review_xpath).text.strip()
-
-                                    # 태그 추출
-                                    tags = []
-                                    for tag_idx in range(1, MAX_TAGS_PER_REVIEW + 1):
-                                        try:
-                                            tag_xpath = (
-                                                f'//*[@id="gdasList"]/li[{r_idx}]/'
-                                                f'div[2]/div[2]/dl[{tag_idx}]/dd/span'
-                                            )
-                                            tag = driver.find_element(By.XPATH, tag_xpath).text.strip()
-                                            tags.append(tag)
-                                        except NoSuchElementException:
-                                            continue
-
-                                    # 데이터 저장
-                                    category_data.append({
-                                        'product': name,
-                                        'tag': ', '.join(tags),
-                                        'review': review
-                                    })
-                                    # 🏷️ 태그 실시간 출력
-                                    print(f"        🏷️ 태그: {tags}")
-                                    print(f"        ✅ 리뷰 수집 완료 [li={r_idx}]: {review[:30]}...")
+                                    btn_css = f'#gdasContentsArea > div > div.pageing > a:nth-child({page_num})'
+                                    page_btn = driver.find_element(By.CSS_SELECTOR, btn_css)
+                                    page_btn.click()
+                                    time.sleep(REVIEW_TAB_WAIT)
+                                    print(f"        ▶️ 리뷰 페이지 {page_num}로 이동")
                                 except NoSuchElementException:
-                                    continue
+                                    print(f"        🚫 {page_num}번 페이지 버튼 못 찾았어, 리뷰 수집 종료")
+                                    break
+
                         except Exception as e:
-                            print(f"      ❌ 리뷰 탭 클릭 실패: {e}")
+                            print(f"      ❌ 리뷰 탭 클릭 또는 수집 오류: {e}")
 
                         # 상세 → 목록으로 돌아가기
                         driver.back()
