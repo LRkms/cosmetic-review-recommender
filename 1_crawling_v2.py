@@ -30,6 +30,27 @@ HEADLESS_MODE = True
 WINDOW_SIZE = "1920,1080"
 
 # ========================================
+# 🗂️ 카테고리 설정
+# ========================================
+# category_names = ['skincare', 'cleansing', 'suncare', 'menscare']
+category_names = ['menscare']
+
+prefixes = [
+    # '1000001000100',  # 스킨케어
+    # '1000001001000',  # 클렌징
+    # '1000001001100',  # 선케어
+    '1000001000700',  # 맨즈케어
+]
+# 각 카테고리별 하위 카테고리 코드 및 키 이름
+subcategory_map = [
+    [(7, 'toner')]
+    # [(13, 'toner')], (14, 'serum'), (15, 'cream'), (16, 'lotion'), (10, 'mist_oil')],
+    # [(1, 'foam_gel'), (4, 'oil_balm'), (5, 'water_milk'), (7, 'peeling_scrub')],
+    # [(6, 'suncream'), (3, 'sunstick'), (4, 'suncushion'), (5, 'sunspray_patch')],
+    # [(7, 'toner')]
+]
+
+# ========================================
 # 🍀 Chrome Driver 설정 (undetected_chromedriver 사용)
 # ========================================
 options = uc.ChromeOptions()
@@ -50,6 +71,7 @@ if HEADLESS_MODE:
 driver = uc.Chrome(options=options)
 print("✅ 크롬 드라이버(undetected) 설정 완료")
 
+
 # ========================================
 # 🍪 쿠키 관련 함수
 # ========================================
@@ -63,9 +85,11 @@ def load_cookies():
         driver.refresh()
         time.sleep(3)
 
+
 def save_cookies():
     with open("cookies.pkl", "wb") as f:
         pickle.dump(driver.get_cookies(), f)
+
 
 if not os.path.exists("cookies.pkl"):
     print("❗ CAPTCHA 페이지가 보이면 수동으로 풀고 Enter를 누르세요...")
@@ -75,12 +99,54 @@ if not os.path.exists("cookies.pkl"):
 else:
     load_cookies()
 
+
 # ========================================
-# 🗂️ 카테고리 설정
+# 🏷️ 태그 및 리뷰 수집 함수
 # ========================================
-category_names = ['menscare']
-prefixes = ['1000001000700']
-subcategory_map = [[(7, 'toner')]]
+def collect_tags_and_review(r_idx):
+    """
+    태그 존재 여부에 따라 적절한 XPath로 태그와 리뷰를 수집하는 함수
+    """
+    tags = []
+    review = ""
+
+    # 먼저 태그가 있는지 확인 (div[2]/div[2]에서 태그 요소 존재 여부 확인)
+    has_tags = False
+    try:
+        # 태그 영역이 있는지 확인
+        tag_area_xpath = f'//*[@id="gdasList"]/li[{r_idx}]/div[2]/div[2]/dl[1]'
+        driver.find_element(By.XPATH, tag_area_xpath)
+        has_tags = True
+        print(f"        📍 태그 영역 발견 (리뷰 {r_idx})")
+    except NoSuchElementException:
+        print(f"        📍 태그 없음 (리뷰 {r_idx})")
+
+    if has_tags:
+        # 태그가 있는 경우: 태그 수집 후 div[3]에서 리뷰 수집
+        for tag_idx in range(1, MAX_TAGS_PER_REVIEW + 1):
+            try:
+                tag_xpath = f'//*[@id="gdasList"]/li[{r_idx}]/div[2]/div[2]/dl[{tag_idx}]/dd/span'
+                tag = driver.find_element(By.XPATH, tag_xpath).text.strip()
+                if tag:  # 빈 태그가 아닌 경우만 추가
+                    tags.append(tag)
+            except NoSuchElementException:
+                break  # 더 이상 태그가 없으면 중단
+
+        # 리뷰는 div[3]에서 수집
+        try:
+            review_xpath = f'//*[@id="gdasList"]/li[{r_idx}]/div[2]/div[3]'
+            review = driver.find_element(By.XPATH, review_xpath).text.strip()
+        except NoSuchElementException:
+            print(f"        ❌ 태그 있는 리뷰의 텍스트 수집 실패 (리뷰 {r_idx})")
+    else:
+        # 태그가 없는 경우: div[2]에서 리뷰 수집
+        try:
+            review_xpath = f'//*[@id="gdasList"]/li[{r_idx}]/div[2]/div[2]'
+            review = driver.find_element(By.XPATH, review_xpath).text.strip()
+        except NoSuchElementException:
+            print(f"        ❌ 태그 없는 리뷰의 텍스트 수집 실패 (리뷰 {r_idx})")
+
+    return tags, review
 
 os.makedirs('./data', exist_ok=True)
 
@@ -152,33 +218,29 @@ for idx in range(min(len(category_names), len(prefixes), len(subcategory_map))):
                                 for r_idx in range(1, MAX_REVIEWS_PER_PRODUCT + 1):
                                     if reviews_collected >= MAX_REVIEWS_PER_PRODUCT:
                                         break
-                                    try:
-                                        review_xpath = f'//*[@id="gdasList"]/li[{r_idx}]/div[2]/div[3]'
-                                        review = driver.find_element(By.XPATH, review_xpath).text.strip()
 
-                                        tags = []
-                                        for tag_idx in range(1, MAX_TAGS_PER_REVIEW + 1):
-                                            try:
-                                                tag_xpath = (
-                                                    f'//*[@id="gdasList"]/li[{r_idx}]/div[2]/div[2]/dl[{tag_idx}]/dd/span'
-                                                )
-                                                tag = driver.find_element(By.XPATH, tag_xpath).text.strip()
-                                                tags.append(tag)
-                                            except NoSuchElementException:
-                                                continue
+                                    # 개선된 태그 및 리뷰 수집 함수 사용
+                                    tags, review = collect_tags_and_review(r_idx)
 
+                                    if review:  # 리뷰가 성공적으로 수집된 경우만 저장
                                         category_data.append({
                                             'product': name,
-                                            'tag': ', '.join(tags),
+                                            'tag': ', '.join(tags) if tags else '',
                                             'review': review
                                         })
                                         reviews_collected += 1
-                                        print(f"        🏷️ 태그: {tags}")
-                                        print(f"        ✅ 리뷰 [{reviews_collected}/{MAX_REVIEWS_PER_PRODUCT}]: {review[:30]}...")
 
-                                    except NoSuchElementException:
-                                        continue
+                                        if tags:
+                                            print(f"        🏷️ 태그: {tags}")
+                                        else:
+                                            print(f"        🏷️ 태그: 없음")
+                                        print(
+                                            f"        ✅ 리뷰 [{reviews_collected}/{MAX_REVIEWS_PER_PRODUCT}]: {review[:30]}...")
+                                    else:
+                                        # 리뷰를 찾을 수 없으면 해당 페이지의 리뷰가 끝난 것으로 간주
+                                        break
 
+                                # 다음 리뷰 페이지로 이동
                                 page_num += 1
                                 try:
                                     btn_css = f'#gdasContentsArea > div > div.pageing > a:nth-child({page_num})'
@@ -187,6 +249,7 @@ for idx in range(min(len(category_names), len(prefixes), len(subcategory_map))):
                                     time.sleep(REVIEW_TAB_WAIT)
                                     print(f"        ▶️ 리뷰 페이지 {page_num}로 이동")
                                 except NoSuchElementException:
+                                    print(f"        🔚 더 이상 리뷰 페이지가 없음")
                                     break
 
                         except Exception as e:
