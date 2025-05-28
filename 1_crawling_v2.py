@@ -33,17 +33,17 @@ WINDOW_SIZE = "1920,1080"
 # 🗂️ 카테고리 설정
 # ========================================
 # category_names = ['skincare', 'cleansing', 'suncare', 'menscare']
-category_names = ['menscare']
+category_names = ['skincare']
 
 prefixes = [
-    # '1000001000100',  # 스킨케어
+    '1000001000100',  # 스킨케어
     # '1000001001000',  # 클렌징
     # '1000001001100',  # 선케어
-    '1000001000700',  # 맨즈케어
+    # '1000001000700',  # 맨즈케어
 ]
 # 각 카테고리별 하위 카테고리 코드 및 키 이름
 subcategory_map = [
-    [(7, 'toner')]
+    [(13, 'toner')]
     # [(13, 'toner')], (14, 'serum'), (15, 'cream'), (16, 'lotion'), (10, 'mist_oil')],
     # [(1, 'foam_gel'), (4, 'oil_balm'), (5, 'water_milk'), (7, 'peeling_scrub')],
     # [(6, 'suncream'), (3, 'sunstick'), (4, 'suncushion'), (5, 'sunspray_patch')],
@@ -148,6 +148,7 @@ def collect_tags_and_review(r_idx):
 
     return tags, review
 
+
 os.makedirs('./data', exist_ok=True)
 
 # ========================================
@@ -167,9 +168,16 @@ for idx in range(min(len(category_names), len(prefixes), len(subcategory_map))):
 
     for code, sub in sub_list:
         key = f"{category}_{sub}"
-        category_data = []
+        # [변경] 기존 category_data = [] 제거하고 CSV 파일 경로 설정
+        csv_filepath = f'./data/{key}.csv'
+
+        # [변경] CSV 파일 초기화 (헤더만 작성)
+        df_header = pd.DataFrame(columns=['product', 'tag', 'review'])
+        df_header.to_csv(csv_filepath, index=False, encoding='utf-8-sig')
 
         print(f"\n📁 [{category} → {sub}] 크롤링 시작")
+        # [변경] 저장 파일 경로 출력 추가
+        print(f"💾 저장 파일: {csv_filepath}")
         current_page = 1
 
         while current_page <= MAX_PAGES:
@@ -190,6 +198,9 @@ for idx in range(min(len(category_names), len(prefixes), len(subcategory_map))):
                         product_element = driver.find_element(By.XPATH, xpath)
                         name = product_element.text.strip()
                         print(f"    🔍 제품 발견: {name}")
+
+                        # [변경] 제품별 데이터 리스트 생성
+                        product_data = []
 
                         driver.execute_script("arguments[0].click();", product_element)
                         time.sleep(PRODUCT_CLICK_WAIT)
@@ -223,7 +234,8 @@ for idx in range(min(len(category_names), len(prefixes), len(subcategory_map))):
                                     tags, review = collect_tags_and_review(r_idx)
 
                                     if review:  # 리뷰가 성공적으로 수집된 경우만 저장
-                                        category_data.append({
+                                        # [변경] category_data 대신 product_data에 추가
+                                        product_data.append({
                                             'product': name,
                                             'tag': ', '.join(tags) if tags else '',
                                             'review': review
@@ -255,6 +267,17 @@ for idx in range(min(len(category_names), len(prefixes), len(subcategory_map))):
                         except Exception as e:
                             print(f"      ❌ 리뷰 탭 클릭 또는 수집 오류: {e}")
 
+                        # [변경] 제품 리뷰 수집 완료 후 즉시 CSV에 추가 저장
+                        if product_data:  # 수집된 리뷰가 있을 때만
+                            df_product = pd.DataFrame(product_data)
+                            df_product.to_csv(csv_filepath, mode='a', header=False,
+                                              index=False, encoding='utf-8-sig')
+
+                            print(f"        💾 저장완료: {name} ({len(product_data)}개 리뷰)")
+
+                            # [변경] 메모리 정리
+                            del product_data, df_product
+
                         driver.back()
                         time.sleep(BACK_WAIT)
 
@@ -263,14 +286,20 @@ for idx in range(min(len(category_names), len(prefixes), len(subcategory_map))):
 
             current_page += 1
 
-        df = pd.DataFrame(category_data, columns=['product', 'tag', 'review'])
-        df.to_csv(f'./data/{key}.csv', index=False, encoding='utf-8-sig')
+        # [변경] 기존 DataFrame 생성 및 저장 코드 제거, 완료된 파일 통계로 대체
+        try:
+            final_df = pd.read_csv(csv_filepath, encoding='utf-8-sig')
+            total_reviews = len(final_df)
+            unique_products = final_df['product'].nunique()
 
-        category_end_time = time.time()
-        category_duration = category_end_time - category_start_time
+            category_end_time = time.time()
+            category_duration = category_end_time - category_start_time
 
-        print(f"✅ 저장 완료: {key}.csv (총 {len(category_data)}개 리뷰)")
-        print(f"⏱️ {key} 소요시간: {category_duration:.1f}초 ({category_duration / 60:.1f}분)")
+            print(f"✅ {key} 완료: 제품 {unique_products}개, 총 리뷰 {total_reviews}개")
+            print(f"💾 파일 저장: {csv_filepath}")
+            print(f"⏱️ {key} 소요시간: {category_duration:.1f}초 ({category_duration / 60:.1f}분)")
+        except Exception as e:
+            print(f"❌ {key} 완료 통계 출력 오류: {e}")
 
 # ========================================
 # 📊 최종 결과 출력
