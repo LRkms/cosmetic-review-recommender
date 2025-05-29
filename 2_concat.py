@@ -27,6 +27,9 @@ for path in data_paths:
 # 중복 제거 (같은 제품명에 대해 여러 파일에서 들어온 경우)
 df_all.drop_duplicates(subset='products', inplace=True)
 
+# tags가 NaN이거나 strip한 결과가 empty인 경우 필터링
+df_all = df_all[df_all['tags'].notna() & (df_all['tags'].str.strip() != '')]
+
 # 결과 저장
 os.makedirs('./cleaned_data', exist_ok=True)
 df_all.to_csv('./cleaned_data/cosmetic_reviews.csv', index=False, encoding='utf-8-sig')
